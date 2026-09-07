@@ -3,12 +3,18 @@
   const conditions = ['dry', 'moist'];
   const maxImageBytes = 750 * 1024;
   const premadeFlags = [
-    { id: 'sun', name: 'Sun', symbol: '☼', color: '#f0b84b' },
-    { id: 'water', name: 'Water', symbol: '≈', color: '#5c9fc5' },
-    { id: 'tree', name: 'Tree', symbol: '✦', color: '#4b8757' },
-    { id: 'bed', name: 'Bed', symbol: '▦', color: '#bd7651' },
-    { id: 'path', name: 'Path', symbol: '↝', color: '#8c8572' },
-    { id: 'shed', name: 'Shed', symbol: '⌂', color: '#88634e' }
+    { id: 'sun', name: 'Sun', symbol: '☼', color: '#f0b84b', image: '/flags/sun.svg' },
+    { id: 'water', name: 'Water', symbol: '≈', color: '#5c9fc5', image: '/flags/water.svg' },
+    { id: 'tree', name: 'Tree', symbol: '✦', color: '#4b8757', image: '/flags/tree.svg' },
+    { id: 'bed', name: 'Bed', symbol: '▦', color: '#bd7651', image: '/flags/bed.svg' },
+    { id: 'path', name: 'Path', symbol: '↝', color: '#8c8572', image: '/flags/path.svg' },
+    { id: 'shed', name: 'Shed', symbol: '⌂', color: '#88634e', image: '/flags/shed.svg' },
+    { id: 'compost', name: 'Compost', symbol: '♻', color: '#718c58', image: '/flags/compost.svg' },
+    { id: 'vegetable', name: 'Vegetable', symbol: '✿', color: '#6b9b55', image: '/flags/vegetable.svg' },
+    { id: 'flower', name: 'Flower', symbol: '❀', color: '#c56b78', image: '/flags/flower.svg' },
+    { id: 'fountain', name: 'Fountain', symbol: '♒', color: '#4f91a8', image: '/flags/fountain.svg' },
+    { id: 'tools', name: 'Tools', symbol: '⚒', color: '#756b5d', image: '/flags/tools.svg' },
+    { id: 'bench', name: 'Bench', symbol: '▰', color: '#9b6b45', image: '/flags/bench.svg' }
   ];
 
   let setupComplete = false;
@@ -50,6 +56,12 @@
   $: tileCount = columns * rows;
   $: markedTiles = Object.keys(yard.tiles).length;
   $: selectedCount = selectedTiles.size;
+  $: currentItems = Object.entries(yard.tiles)
+    .filter(([, tile]) => tile.contents?.trim())
+    .map(([id, tile]) => {
+      const [row, column] = id.split('-').map(Number);
+      return { id, row, column, contents: tile.contents, name: tile.name };
+    });
 
   function isValidDimension(value) {
     return Number.isInteger(Number(value)) && Number(value) > 0 && Number(value) <= 1000;
@@ -357,6 +369,12 @@
     yard = { ...yard, plantLibrary: (yard.plantLibrary || []).filter((plant) => plant.id !== id) };
   }
 
+  function openLibraryItem(item) {
+    libraryOpen = false;
+    selectedTiles = new Set();
+    openTile(item.row, item.column);
+  }
+
   function tileLabel(row, column) {
     return yard.tiles[`${row}-${column}`]?.type || 'Unmarked';
   }
@@ -434,7 +452,7 @@
         <div class="map-tools">
           <button class:active={selectionMode} class="tool-button" on:click={() => selectionMode ? leaveSelectionMode() : (selectionMode = true)}>{selectionMode ? 'Selecting tiles' : 'Select multiple'}</button>
           {#if selectionMode && selectedCount}<button class="tool-button" on:click={applyToSelection}>Apply details ({selectedCount})</button><button class="tool-button quiet" on:click={clearSelection}>Clear selected</button>{/if}
-          <button class="tool-button quiet" on:click={() => { selectedTiles = new Set(); libraryOpen = true; }}>Plant library</button>
+          <button class="tool-button quiet" on:click={() => { selectedTiles = new Set(); libraryTab = 'plants'; libraryOpen = true; }}>Plant library</button>
           <button class="tool-button quiet" on:click={exportGarden}>Export plan</button>
           <label class="tool-button quiet file-button">Import plan<input type="file" accept="application/json" on:change={importGarden} /></label>
         </div>
@@ -466,11 +484,9 @@
       <label>Condition<select bind:value={tileForm.condition}>{#each conditions as condition}<option value={condition}>{condition[0].toUpperCase() + condition.slice(1)}</option>{/each}</select></label>
       <label>Contents <span class="label-help">Choose a catalogue plant or type freely</span><select value={tileForm.plantId} on:change={(event) => choosePlant(event.currentTarget.value)}><option value="">Manual entry</option>{#each yard.plantLibrary || [] as plant}<option value={plant.id}>{plant.name}</option>{/each}</select><textarea maxlength="160" rows="3" bind:value={tileForm.contents} on:input={() => (tileForm = { ...tileForm, plantId: '' })} placeholder="e.g. raised bed, apple tree"></textarea>{#if tileForm.plantId}<button class="plant-link" type="button" on:click={() => openPlantInfo(tileForm.plantId)}>{tileForm.contents} · view plant info</button>{/if}</label>
       <div class="flag-library"><div class="library-heading"><span class="field-label">Tile flag</span></div>
-        {#if libraryTab === 'flags'}
-          <div class="flag-picker">{#each [...premadeFlags, ...(yard.customFlags || [])] as flag}<button class:selected={tileForm.flagId === flag.id} class="flag-option" on:click={() => (tileForm = { ...tileForm, flagId: flag.id })}>{#if flag.image}<img src={flag.image} alt="" />{:else}<span style={`color: ${flag.color}`}>{flag.symbol}</span>{/if}<small>{flag.name}</small></button>{/each}</div>
-          <label class="upload-label">Add custom flag <input type="file" accept="image/png,image/jpeg,image/webp" on:change={addCustomFlag} /></label>
-          {#if imageError}<p class="form-error">{imageError}</p>{/if}
-        {/if}
+        <div class="flag-picker">{#each [...premadeFlags, ...(yard.customFlags || [])] as flag}<button class:selected={tileForm.flagId === flag.id} class="flag-option" on:click={() => (tileForm = { ...tileForm, flagId: flag.id })}>{#if flag.image}<img src={flag.image} alt="" />{:else}<span style={`color: ${flag.color}`}>{flag.symbol}</span>{/if}<small>{flag.name}</small></button>{/each}</div>
+        <label class="upload-label">Add custom flag <input type="file" accept="image/png,image/jpeg,image/webp" on:change={addCustomFlag} /></label>
+        {#if imageError}<p class="form-error">{imageError}</p>{/if}
       </div>
       <div class="modal-actions"><button class="text-button danger" on:click={clearTile}>Clear tile</button><button class="primary-button" on:click={saveTile}>Save details</button></div>
     </div>
@@ -495,14 +511,25 @@
   <div class="modal-backdrop" role="presentation" on:click={(event) => event.target === event.currentTarget && (libraryOpen = false)}>
     <div class="tile-modal library-modal" role="dialog" aria-modal="true" aria-labelledby="library-title" tabindex="-1">
       <div class="modal-heading"><div><p class="eyebrow">Garden records</p><h2 id="library-title">Plant library</h2></div><button class="close-button" aria-label="Close plant library" on:click={() => (libraryOpen = false)}>×</button></div>
-      <form class="plant-form" on:submit|preventDefault={savePlant}>
-        <label>Plant name<input maxlength="80" bind:value={plantForm.name} placeholder="e.g. Lavender" required /></label>
-        <div class="dimension-grid"><label>Mature size<input maxlength="60" bind:value={plantForm.matureSize} placeholder="e.g. 2 × 2 ft" /></label><label>Light<select bind:value={plantForm.light}><option>Full sun</option><option>Partial shade</option><option>Full shade</option></select></label></div>
-        <label>Seasonal behavior<select bind:value={plantForm.seasonal}><option>Annual</option><option>Perennial</option><option>Evergreen</option><option>Deciduous</option><option>Cool-season</option><option>Warm-season</option></select></label>
-        <label>Notes<textarea maxlength="500" rows="2" bind:value={plantForm.notes} placeholder="Care, spacing, bloom time, or source"></textarea></label>
-        <div class="form-actions"><button class="primary-button" type="submit">{editingPlantId ? 'Save plant' : 'Add plant'}</button>{#if editingPlantId}<button class="text-button" type="button" on:click={cancelPlantEdit}>Cancel edit</button>{/if}</div>
-      </form>
-      <div class="catalogue"><p class="eyebrow">Catalogue ({(yard.plantLibrary || []).length})</p>{#if (yard.plantLibrary || []).length}{#each yard.plantLibrary as plant}<article class="plant-record"><div><strong>{plant.name}</strong><p>{plant.matureSize || 'Size not recorded'} · {plant.light} · {plant.seasonal}</p>{#if plant.notes}<small>{plant.notes}</small>{/if}</div><div class="record-actions"><button class="text-button" on:click={() => editPlant(plant)}>Edit</button><button class="text-button danger" on:click={() => removePlant(plant.id)}>Remove</button></div></article>{/each}{:else}<p class="library-note">Your plant catalogue is empty.</p>{/if}</div>
+      <nav class="library-tabs" aria-label="Garden library sections">
+        <button class:active={libraryTab === 'flags'} type="button" on:click={() => (libraryTab = 'flags')}>Flags ({(yard.customFlags || []).length})</button>
+        <button class:active={libraryTab === 'plants'} type="button" on:click={() => (libraryTab = 'plants')}>Plants ({(yard.plantLibrary || []).length})</button>
+        <button class:active={libraryTab === 'items'} type="button" on:click={() => (libraryTab = 'items')}>Items ({currentItems.length})</button>
+      </nav>
+      {#if libraryTab === 'flags'}
+        <div class="library-records flag-records">{#if (yard.customFlags || []).length}{#each yard.customFlags as flag}<article class="library-record"><div class="library-record-icon">{#if flag.image}<img src={flag.image} alt="" />{:else}<span style={`color: ${flag.color}`}>{flag.symbol}</span>{/if}</div><div><strong>{flag.name}</strong><p>Custom flag available in tile details</p></div></article>{/each}{:else}<p class="library-note">Your custom flag library is empty.</p>{/if}</div>
+      {:else if libraryTab === 'plants'}
+        <form class="plant-form" on:submit|preventDefault={savePlant}>
+          <label>Plant name<input maxlength="80" bind:value={plantForm.name} placeholder="e.g. Lavender" required /></label>
+          <div class="dimension-grid"><label>Mature size<input maxlength="60" bind:value={plantForm.matureSize} placeholder="e.g. 2 × 2 ft" /></label><label>Light<select bind:value={plantForm.light}><option>Full sun</option><option>Partial shade</option><option>Full shade</option></select></label></div>
+          <label>Seasonal behavior<select bind:value={plantForm.seasonal}><option>Annual</option><option>Perennial</option><option>Evergreen</option><option>Deciduous</option><option>Cool-season</option><option>Warm-season</option></select></label>
+          <label>Notes<textarea maxlength="500" rows="2" bind:value={plantForm.notes} placeholder="Care, spacing, bloom time, or source"></textarea></label>
+          <div class="form-actions"><button class="primary-button" type="submit">{editingPlantId ? 'Save plant' : 'Add plant'}</button>{#if editingPlantId}<button class="text-button" type="button" on:click={cancelPlantEdit}>Cancel edit</button>{/if}</div>
+        </form>
+        <div class="catalogue"><p class="eyebrow">Catalogue ({(yard.plantLibrary || []).length})</p>{#if (yard.plantLibrary || []).length}{#each yard.plantLibrary as plant}<article class="plant-record"><div><strong>{plant.name}</strong><p>{plant.matureSize || 'Size not recorded'} · {plant.light} · {plant.seasonal}</p>{#if plant.notes}<small>{plant.notes}</small>{/if}</div><div class="record-actions"><button class="text-button" on:click={() => editPlant(plant)}>Edit</button><button class="text-button danger" on:click={() => removePlant(plant.id)}>Remove</button></div></article>{/each}{:else}<p class="library-note">Your plant catalogue is empty.</p>{/if}</div>
+      {:else}
+        <div class="library-records">{#if currentItems.length}{#each currentItems as item}<button class="library-record item-record" type="button" on:click={() => openLibraryItem(item)}><span><strong>{item.contents}</strong>{#if item.name}<small>{item.name}</small>{/if}</span><small>Row {item.row + 1}, column {item.column + 1}</small></button>{/each}{:else}<p class="library-note">Your garden has no current plant or item entries.</p>{/if}</div>
+      {/if}
     </div>
   </div>
 {/if}

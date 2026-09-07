@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Vegetable flag">
+  <path d="M13 34c0-12 8-20 19-20s19 8 19 20c0 14-8 22-19 22s-19-8-19-22Z" fill="#6b9b55"/>
+  <path d="M32 16c0-7 5-11 12-12-1 7-5 12-12 12Z" fill="#4b8757"/>
+  <path d="M32 18v34" stroke="#d8e8c9" stroke-width="3" stroke-linecap="round"/>
+</svg>
