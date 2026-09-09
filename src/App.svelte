@@ -453,9 +453,9 @@
 </svelte:head>
 
 <svelte:window on:keydown={(event) => event.key === 'Escape' && handleEscape()} bind:innerWidth={viewportWidth} />
-<svelte:body class:dark-theme={theme === 'dark'} />
+<svelte:body class:dark-theme={theme === 'dark'} class:light-theme={theme === 'light'} />
 
-<main class:dark-theme={theme === 'dark'} class="page-shell">
+<main class:dark-theme={theme === 'dark'} class:light-theme={theme === 'light'} class="page-shell">
   <header class="topbar">
     <div class="brand-mark">BP</div>
     <div>
