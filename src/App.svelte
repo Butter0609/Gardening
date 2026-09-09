@@ -2,6 +2,7 @@
   const tileTypes = ['stone', 'gravel', 'grass', 'dirt', 'house'];
   const conditions = ['dry', 'moist'];
   const maxImageBytes = 750 * 1024;
+  const gridFootSize = 5;
   const premadeFlags = [
     { id: 'sun', name: 'Sun', symbol: '☼', color: '#f0b84b', image: '/flags/sun.svg' },
     { id: 'water', name: 'Water', symbol: '≈', color: '#5c9fc5', image: '/flags/water.svg' },
@@ -19,7 +20,7 @@
   const premadeIcons = [
     { id: 'icon-leaf', name: 'Leaf', symbol: '❧', color: '#4b8757' },
     { id: 'icon-seedling', name: 'Seedling', symbol: '♧', color: '#5e9b55' },
-    { id: 'icon-cactus', name: 'Cactus', symbol: '♒', color: '#4f8b68' },
+    { id: 'icon-cactus', name: 'Cactus', symbol: '🌵', color: '#4f8b68' },
     { id: 'icon-apple', name: 'Apple', symbol: '●', color: '#bd5548' },
     { id: 'icon-carrot', name: 'Carrot', symbol: '◈', color: '#e0873d' },
     { id: 'icon-pumpkin', name: 'Pumpkin', symbol: '◉', color: '#d47a35' },
@@ -46,6 +47,7 @@
   let setupComplete = false;
   let theme = 'dark';
   let viewportWidth = 1200;
+  let mapAreaWidth = 800;
   let formError = '';
   let selectedTile = null;
   let selectedTiles = new Set();
@@ -67,7 +69,7 @@
   let libraryTab = 'flags';
   let importError = '';
   let imageError = '';
-  let plantForm = { name: '', matureSize: '', light: 'Full sun', seasonal: 'Perennial', notes: '', iconId: '' };
+  let plantForm = { name: '', matureWidth: '', matureHeight: '', light: 'Full sun', seasonal: 'Perennial', notes: '', iconId: '' };
   let bulkForm = { type: '', condition: '', contents: '', flagId: '' };
   let tileForm = { name: '', type: 'grass', condition: 'dry', contents: '', plantId: '', flagId: '', image: '' };
   let yard = {
@@ -79,9 +81,9 @@
     plantLibrary: []
   };
 
-  $: columns = setupComplete ? Math.ceil(yard.width / 5) : 0;
-  $: rows = setupComplete ? Math.ceil(yard.length / 5) : 0;
-  $: tileSize = setupComplete ? Math.max(42, Math.min(88, (viewportWidth - 560) / Math.max(columns, 1))) : 42;
+  $: columns = setupComplete ? Math.ceil(yard.width / gridFootSize) : 0;
+  $: rows = setupComplete ? Math.ceil(yard.length / gridFootSize) : 0;
+  $: tileSize = setupComplete ? Math.max(50, Math.floor(mapAreaWidth / Math.max(columns, 1))) : 50;
   $: tileCount = columns * rows;
   $: markedTiles = Object.keys(yard.tiles).length;
   $: selectedCount = selectedTiles.size;
@@ -105,12 +107,13 @@
   ];
 
   function isValidDimension(value) {
-    return Number.isInteger(Number(value)) && Number(value) > 0 && Number(value) <= 1000;
+    const next = Number(value);
+    return Number.isInteger(next) && next >= 50 && next <= 1000;
   }
 
   function startPlanning() {
     if (!isValidDimension(yard.length) || !isValidDimension(yard.width)) {
-      formError = 'Use a positive whole number of feet between 1 and 1,000.';
+      formError = 'Use a positive whole number of feet between 50 and 1,000.';
       return;
     }
 
@@ -417,14 +420,23 @@
 
   function savePlant() {
     if (!plantForm.name.trim()) return;
-    const plant = { ...plantForm, id: editingPlantId || `plant-${Date.now()}` };
+    const matureWidth = Math.max(0, Number(plantForm.matureWidth || 0));
+    const matureHeight = Math.max(0, Number(plantForm.matureHeight || 0));
+    const plant = {
+      ...plantForm,
+      matureSize: `${matureWidth || ''} × ${matureHeight || ''} ft`,
+      id: editingPlantId || `plant-${Date.now()}`
+    };
     yard = { ...yard, plantLibrary: editingPlantId ? (yard.plantLibrary || []).map((item) => item.id === editingPlantId ? plant : item) : [...(yard.plantLibrary || []), plant] };
-    plantForm = { name: '', matureSize: '', light: 'Full sun', seasonal: 'Perennial', notes: '', iconId: '' };
+    plantForm = { name: '', matureWidth: '', matureHeight: '', light: 'Full sun', seasonal: 'Perennial', notes: '', iconId: '' };
     editingPlantId = null;
   }
 
   function editPlant(plant) {
-    plantForm = { name: plant.name, matureSize: plant.matureSize || '', light: plant.light, seasonal: plant.seasonal, notes: plant.notes || '', iconId: plant.iconId || '' };
+    const pieces = (plant.matureSize || '').split('×');
+    const width = pieces[0]?.trim() || '';
+    const height = pieces[1]?.replace(/ft/gi, '').trim() || '';
+    plantForm = { name: plant.name, matureWidth: width, matureHeight: height, light: plant.light, seasonal: plant.seasonal, notes: plant.notes || '', iconId: plant.iconId || '' };
     editingPlantId = plant.id;
   }
 
@@ -478,8 +490,8 @@
 
       <form on:submit|preventDefault={startPlanning} class="setup-form">
         <div class="dimension-grid">
-          <label>Length <span>feet</span><input type="number" min="5" max="1000" step="5" bind:value={yard.length} required /></label>
-          <label>Width <span>feet</span><input type="number" min="5" max="1000" step="5" bind:value={yard.width} required /></label>
+          <label>Length <span>feet</span><input type="number" min="50" max="1000" step="5" bind:value={yard.length} required /></label>
+          <label>Width <span>feet</span><input type="number" min="50" max="1000" step="5" bind:value={yard.width} required /></label>
         </div>
         <fieldset>
           <legend>General conditions</legend>
@@ -492,7 +504,7 @@
         </fieldset>
         {#if formError}<p class="form-error">{formError}</p>{/if}
         <button class="primary-button" type="submit">Open backyard map <span aria-hidden="true">→</span></button>
-        <p class="form-note">Dimensions must be positive whole feet between 1 and 1,000. Tiles represent 5 × 5 feet.</p>
+        <p class="form-note">Dimensions must be positive whole feet between 50 and 1,000. Tiles represent 50 × 50 feet.</p>
       </form>
     </section>
   {:else}
@@ -501,7 +513,7 @@
         <p class="eyebrow">Your backyard</p>
         <h2>{yard.length} × {yard.width}<span> ft</span></h2>
         <dl>
-          <div><dt>Grid size</dt><dd>5 × 5 ft</dd></div>
+          <div><dt>Tile size</dt><dd>5 × 5 ft</dd></div>
           <div><dt>Rows</dt><dd>{rows}</dd></div>
           <div><dt>Columns</dt><dd>{columns}</dd></div>
         </dl>
@@ -517,7 +529,7 @@
         <button class="text-button" on:click={() => (setupComplete = false)}>← Edit dimensions</button>
       </aside>
 
-      <div class="map-area">
+      <div class="map-area" bind:clientWidth={mapAreaWidth}>
         <div class="map-heading"><div><p class="eyebrow">{selectionMode ? 'Click or drag across tiles' : 'Click any tile to add details'}</p><h2>Map your space</h2></div><span class="scale-key"><i></i> 5 ft</span></div>
         <div class="map-tools">
           <button class:active={selectionMode} class="tool-button" on:click={() => selectionMode ? leaveSelectionMode() : (selectionMode = true)}>{selectionMode ? 'Selecting tiles' : 'Select multiple'}</button>
@@ -598,7 +610,17 @@
       {:else if libraryTab === 'plants'}
         <form class="plant-form" on:submit|preventDefault={savePlant}>
           <label>Plant name<input maxlength="80" bind:value={plantForm.name} placeholder="e.g. Lavender" required /></label>
-          <div class="dimension-grid"><label>Mature size<input maxlength="60" bind:value={plantForm.matureSize} placeholder="e.g. 2 × 2 ft" /></label><label>Light<select bind:value={plantForm.light}><option>Full sun</option><option>Partial shade</option><option>Full shade</option></select></label></div>
+          <div class="dimension-grid">
+            <label class="mature-size-row">Mature size
+              <span class="mature-size-controls">
+                <input type="number" min="1" max="1000" step="1" bind:value={plantForm.matureWidth} placeholder="2" />
+                <span class="mature-symbol">×</span>
+                <input type="number" min="1" max="1000" step="1" bind:value={plantForm.matureHeight} placeholder="2" />
+                <span class="mature-unit">ft</span>
+              </span>
+            </label>
+            <label>Light<select bind:value={plantForm.light}><option>Full sun</option><option>Partial shade</option><option>Full shade</option></select></label>
+          </div>
           <label>Seasonal behavior<select bind:value={plantForm.seasonal}><option>Annual</option><option>Perennial</option><option>Evergreen</option><option>Deciduous</option><option>Cool-season</option><option>Warm-season</option></select></label>
           <fieldset class="icon-fieldset"><legend>Record icon</legend><div class="icon-picker">{#each premadeIcons as icon}<button type="button" class:selected={plantForm.iconId === icon.id} class="icon-option" on:click={() => (plantForm = { ...plantForm, iconId: icon.id })}><span style={`color: ${icon.color}`}>{icon.symbol}</span><small>{icon.name}</small></button>{/each}</div></fieldset>
           <label>Notes<textarea maxlength="500" rows="2" bind:value={plantForm.notes} placeholder="Care, spacing, bloom time, or source"></textarea></label>
