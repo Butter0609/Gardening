@@ -16,8 +16,36 @@
     { id: 'tools', name: 'Tools', symbol: '⚒', color: '#756b5d', image: '/flags/tools.svg' },
     { id: 'bench', name: 'Bench', symbol: '▰', color: '#9b6b45', image: '/flags/bench.svg' }
   ];
+  const premadeIcons = [
+    { id: 'icon-leaf', name: 'Leaf', symbol: '❧', color: '#4b8757' },
+    { id: 'icon-seedling', name: 'Seedling', symbol: '♧', color: '#5e9b55' },
+    { id: 'icon-cactus', name: 'Cactus', symbol: '♒', color: '#4f8b68' },
+    { id: 'icon-apple', name: 'Apple', symbol: '●', color: '#bd5548' },
+    { id: 'icon-carrot', name: 'Carrot', symbol: '◈', color: '#e0873d' },
+    { id: 'icon-pumpkin', name: 'Pumpkin', symbol: '◉', color: '#d47a35' },
+    { id: 'icon-berry', name: 'Berry', symbol: '⁙', color: '#704b87' },
+    { id: 'icon-herb', name: 'Herb', symbol: '✧', color: '#6a9955' },
+    { id: 'icon-rose', name: 'Rose', symbol: '✤', color: '#c55e73' },
+    { id: 'icon-sunflower', name: 'Sunflower', symbol: '✺', color: '#d9a53e' },
+    { id: 'icon-tulip', name: 'Tulip', symbol: '♢', color: '#c75d6b' },
+    { id: 'icon-mushroom', name: 'Mushroom', symbol: '♠', color: '#a66450' },
+    { id: 'icon-log', name: 'Log', symbol: '▬', color: '#80583f' },
+    { id: 'icon-rock', name: 'Rock', symbol: '◆', color: '#6d7772' },
+    { id: 'icon-fence', name: 'Fence', symbol: '⌗', color: '#88634e' },
+    { id: 'icon-gate', name: 'Gate', symbol: '▥', color: '#806447' },
+    { id: 'icon-wheelbarrow', name: 'Wheelbarrow', symbol: '◖', color: '#6a7c62' },
+    { id: 'icon-hose', name: 'Hose', symbol: '∿', color: '#4e8ba0' },
+    { id: 'icon-lantern', name: 'Lantern', symbol: '♮', color: '#c18a3a' },
+    { id: 'icon-bird', name: 'Bird', symbol: '⌁', color: '#587a91' },
+    { id: 'icon-bee', name: 'Bee', symbol: '≋', color: '#c49336' },
+    { id: 'icon-butterfly', name: 'Butterfly', symbol: '∞', color: '#8a6795' },
+    { id: 'icon-sprinkler', name: 'Sprinkler', symbol: '⋒', color: '#4f91a8' },
+    { id: 'icon-bin', name: 'Bin', symbol: '▤', color: '#68776b' }
+  ];
 
   let setupComplete = false;
+  let theme = 'dark';
+  let viewportWidth = 1200;
   let formError = '';
   let selectedTile = null;
   let selectedTiles = new Set();
@@ -39,7 +67,7 @@
   let libraryTab = 'flags';
   let importError = '';
   let imageError = '';
-  let plantForm = { name: '', matureSize: '', light: 'Full sun', seasonal: 'Perennial', notes: '' };
+  let plantForm = { name: '', matureSize: '', light: 'Full sun', seasonal: 'Perennial', notes: '', iconId: '' };
   let bulkForm = { type: '', condition: '', contents: '', flagId: '' };
   let tileForm = { name: '', type: 'grass', condition: 'dry', contents: '', plantId: '', flagId: '', image: '' };
   let yard = {
@@ -53,15 +81,28 @@
 
   $: columns = setupComplete ? Math.ceil(yard.width / 5) : 0;
   $: rows = setupComplete ? Math.ceil(yard.length / 5) : 0;
+  $: tileSize = setupComplete ? Math.max(42, Math.min(88, (viewportWidth - 560) / Math.max(columns, 1))) : 42;
   $: tileCount = columns * rows;
   $: markedTiles = Object.keys(yard.tiles).length;
   $: selectedCount = selectedTiles.size;
-  $: currentItems = Object.entries(yard.tiles)
-    .filter(([, tile]) => tile.contents?.trim())
-    .map(([id, tile]) => {
+  $: tileEntries = Object.entries(yard.tiles);
+  $: plantPlacements = tileEntries.reduce((placements, [id, tile]) => {
+    if (tile.plantId) placements[tile.plantId] = [...(placements[tile.plantId] || []), id];
+    return placements;
+  }, {});
+  $: currentItems = [...tileEntries
+    .filter(([, tile]) => tile.contents?.trim() && !tile.plantId)
+    .reduce((items, [id, tile]) => {
+      const key = `${tile.contents.trim().toLowerCase()}|${tile.iconId || tile.flagId || ''}`;
       const [row, column] = id.split('-').map(Number);
-      return { id, row, column, contents: tile.contents, name: tile.name };
-    });
+      const existing = items.get(key);
+      items.set(key, existing ? { ...existing, locations: [...existing.locations, { id, row, column }] } : { id, row, column, locations: [{ id, row, column }], contents: tile.contents, name: tile.name, iconId: tile.iconId || tile.flagId });
+      return items;
+    }, new Map()).values()];
+  $: gardenRecords = [
+    ...(yard.plantLibrary || []).map((plant) => ({ ...plant, locations: plantPlacements[plant.id] || [], recordType: 'plant', recordId: `plant:${plant.id}` })),
+    ...currentItems.map((item) => ({ ...item, recordType: 'item', recordId: `item:${item.id}` }))
+  ];
 
   function isValidDimension(value) {
     return Number.isInteger(Number(value)) && Number(value) > 0 && Number(value) <= 1000;
@@ -294,7 +335,34 @@
 
   function choosePlant(plantId) {
     const plant = (yard.plantLibrary || []).find((item) => item.id === plantId);
-    tileForm = { ...tileForm, plantId, contents: plant?.name || '' };
+    tileForm = { ...tileForm, plantId, contents: plant?.name || '', iconId: plant?.iconId || '' };
+  }
+
+  function iconById(id) {
+    return [...premadeIcons, ...premadeFlags, ...(yard.customFlags || [])].find((icon) => icon.id === id);
+  }
+
+  function dropRecordOnTile(event, row, column) {
+    event.preventDefault();
+    const recordId = event.dataTransfer.getData('text/plain');
+    const record = gardenRecords.find((item) => item.recordId === recordId);
+    if (!record) return;
+    const existing = yard.tiles[`${row}-${column}`] || { name: '', type: 'grass', condition: 'dry', contents: '', plantId: '', flagId: '', image: '' };
+    if (existing.type === 'house') return;
+    const nextTile = { ...existing, contents: record.name || record.contents, plantId: record.recordType === 'plant' ? record.id : existing.plantId, iconId: record.iconId || '' };
+    yard = { ...yard, tiles: { ...yard.tiles, [`${row}-${column}`]: nextTile } };
+  }
+
+  function startRecordDrag(event, record) {
+    event.dataTransfer.setData('text/plain', record.recordId);
+    event.dataTransfer.effectAllowed = 'copy';
+    const ghost = document.createElement('div');
+    ghost.className = 'drag-preview';
+    ghost.textContent = iconById(record.iconId)?.symbol || '•';
+    ghost.style.color = iconById(record.iconId)?.color || '#d8c7a4';
+    document.body.appendChild(ghost);
+    event.dataTransfer.setDragImage(ghost, 32, 32);
+    requestAnimationFrame(() => ghost.remove());
   }
 
   function exportGarden() {
@@ -351,17 +419,17 @@
     if (!plantForm.name.trim()) return;
     const plant = { ...plantForm, id: editingPlantId || `plant-${Date.now()}` };
     yard = { ...yard, plantLibrary: editingPlantId ? (yard.plantLibrary || []).map((item) => item.id === editingPlantId ? plant : item) : [...(yard.plantLibrary || []), plant] };
-    plantForm = { name: '', matureSize: '', light: 'Full sun', seasonal: 'Perennial', notes: '' };
+    plantForm = { name: '', matureSize: '', light: 'Full sun', seasonal: 'Perennial', notes: '', iconId: '' };
     editingPlantId = null;
   }
 
   function editPlant(plant) {
-    plantForm = { name: plant.name, matureSize: plant.matureSize || '', light: plant.light, seasonal: plant.seasonal, notes: plant.notes || '' };
+    plantForm = { name: plant.name, matureSize: plant.matureSize || '', light: plant.light, seasonal: plant.seasonal, notes: plant.notes || '', iconId: plant.iconId || '' };
     editingPlantId = plant.id;
   }
 
   function cancelPlantEdit() {
-    plantForm = { name: '', matureSize: '', light: 'Full sun', seasonal: 'Perennial', notes: '' };
+    plantForm = { name: '', matureSize: '', light: 'Full sun', seasonal: 'Perennial', notes: '', iconId: '' };
     editingPlantId = null;
   }
 
@@ -384,9 +452,10 @@
   <title>{setupComplete ? 'Map your backyard' : 'Backyard planner'}</title>
 </svelte:head>
 
-<svelte:window on:keydown={(event) => event.key === 'Escape' && handleEscape()} />
+<svelte:window on:keydown={(event) => event.key === 'Escape' && handleEscape()} bind:innerWidth={viewportWidth} />
+<svelte:body class:dark-theme={theme === 'dark'} />
 
-<main class="page-shell">
+<main class:dark-theme={theme === 'dark'} class="page-shell">
   <header class="topbar">
     <div class="brand-mark">BP</div>
     <div>
@@ -396,6 +465,7 @@
     {#if setupComplete}
       <div class="progress"><strong>{markedTiles}</strong> / {tileCount} tiles marked</div>
     {/if}
+    <button class="theme-toggle" type="button" on:click={() => (theme = theme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button>
   </header>
 
   {#if !setupComplete}
@@ -458,18 +528,25 @@
         </div>
         {#if importError}<p class="form-error">{importError}</p>{/if}
         <div class:grid-dragging={gridDragging} class="map-scroll" role="region" aria-label="Scrollable backyard grid" on:pointerdown={startGridDrag} on:pointermove={moveGridDrag} on:pointerup={stopGridDrag} on:pointercancel={stopGridDrag}>
-          <div class="yard-grid" style={`--columns: ${columns}; --rows: ${rows}`} aria-label="Backyard map">
+          <div class="yard-grid" style={`--columns: ${columns}; --rows: ${rows}; --tile-size: ${tileSize}px`} aria-label="Backyard map">
             {#each Array(tileCount) as _, index}
               {@const row = Math.floor(index / columns)}
               {@const column = index % columns}
               {@const tile = yard.tiles[`${row}-${column}`]}
-              <button data-row={row} data-column={column} class:boundary-top={hasDifferentNeighbor(row, column, 'top')} class:boundary-right={hasDifferentNeighbor(row, column, 'right')} class:boundary-bottom={hasDifferentNeighbor(row, column, 'bottom')} class:boundary-left={hasDifferentNeighbor(row, column, 'left')} class:marked={tile} class:selected={selectedTiles.has(`${row}-${column}`)} class="grid-tile {tile?.type || ''}" on:pointerdown={startTilePointer} on:pointerup={(event) => { finishTilePointer(event); handleTilePointerUp(event, row, column); }} on:click={(event) => handleTileClick(event, row, column)} on:mousedown={() => startDragSelection(row, column)} on:mouseenter={() => extendDragSelection(row, column)} on:mouseup={stopDragSelection} aria-label={`Tile row ${row + 1}, column ${column + 1}: ${tileLabel(row, column)}`}>
-                {#if tile?.image || flagById(tile?.flagId)?.image}<img class="tile-image" src={tile.image || flagById(tile.flagId).image} alt="" />{:else if tile?.flagId}<span class="tile-flag" style={`--flag-color: ${flagById(tile.flagId)?.color}`}>{flagById(tile.flagId)?.symbol}</span>{/if}
+              <button data-row={row} data-column={column} class:undefined-tile={!tile} class:boundary-top={hasDifferentNeighbor(row, column, 'top')} class:boundary-right={hasDifferentNeighbor(row, column, 'right')} class:boundary-bottom={hasDifferentNeighbor(row, column, 'bottom')} class:boundary-left={hasDifferentNeighbor(row, column, 'left')} class:marked={tile} class:selected={selectedTiles.has(`${row}-${column}`)} class="grid-tile {tile?.type || ''}" on:dragover|preventDefault on:drop={(event) => dropRecordOnTile(event, row, column)} on:pointerdown={startTilePointer} on:pointerup={(event) => { finishTilePointer(event); handleTilePointerUp(event, row, column); }} on:click={(event) => handleTileClick(event, row, column)} on:mousedown={() => startDragSelection(row, column)} on:mouseenter={() => extendDragSelection(row, column)} on:mouseup={stopDragSelection} aria-label={`Tile row ${row + 1}, column ${column + 1}: ${tileLabel(row, column)}`}>
+                {#if tile?.image || flagById(tile?.flagId)?.image}<img class="tile-image" src={tile.image || flagById(tile.flagId).image} alt="" />{:else if tile?.iconId || tile?.flagId}{#if iconById(tile.iconId || tile.flagId)?.image}<img class="tile-image" src={iconById(tile.iconId || tile.flagId).image} alt="" />{:else}<span class="tile-flag" style={`--flag-color: ${iconById(tile.iconId || tile.flagId)?.color}`}>{iconById(tile.iconId || tile.flagId)?.symbol}</span>{/if}{/if}
               </button>
             {/each}
           </div>
         </div>
       </div>
+      <aside class="records-tray" aria-label="Garden records to place">
+        <div class="tray-heading"><p class="eyebrow">Drag to place</p><h2>Garden records</h2></div>
+        <p class="tray-note">Drag a record onto any tile to save it there.</p>
+        <div class="tray-records">
+          {#if gardenRecords.length}{#each gardenRecords as record}<button class="tray-record" draggable="true" type="button" on:dragstart={(event) => startRecordDrag(event, record)} on:click={() => record.recordType === 'plant' && openPlantInfo(record.id)}><span class="record-icon">{#if iconById(record.iconId)?.image}<img src={iconById(record.iconId).image} alt="" />{:else}<span style={`color: ${iconById(record.iconId)?.color || '#68806a'}`}>{iconById(record.iconId)?.symbol || '•'}</span>{/if}</span><span class="record-copy"><strong>{record.name || record.contents}</strong>{#if record.name && record.contents}<small>{record.contents}</small>{/if}<small>{record.locations.length ? `${record.locations.length} location${record.locations.length === 1 ? '' : 's'}` : 'Not placed yet'}</small></span></button>{/each}{:else}<p class="library-note">Add plants or save tile contents to build your records.</p>{/if}
+        </div>
+      </aside>
     </section>
   {/if}
 </main>
@@ -523,10 +600,11 @@
           <label>Plant name<input maxlength="80" bind:value={plantForm.name} placeholder="e.g. Lavender" required /></label>
           <div class="dimension-grid"><label>Mature size<input maxlength="60" bind:value={plantForm.matureSize} placeholder="e.g. 2 × 2 ft" /></label><label>Light<select bind:value={plantForm.light}><option>Full sun</option><option>Partial shade</option><option>Full shade</option></select></label></div>
           <label>Seasonal behavior<select bind:value={plantForm.seasonal}><option>Annual</option><option>Perennial</option><option>Evergreen</option><option>Deciduous</option><option>Cool-season</option><option>Warm-season</option></select></label>
+          <fieldset class="icon-fieldset"><legend>Record icon</legend><div class="icon-picker">{#each premadeIcons as icon}<button type="button" class:selected={plantForm.iconId === icon.id} class="icon-option" on:click={() => (plantForm = { ...plantForm, iconId: icon.id })}><span style={`color: ${icon.color}`}>{icon.symbol}</span><small>{icon.name}</small></button>{/each}</div></fieldset>
           <label>Notes<textarea maxlength="500" rows="2" bind:value={plantForm.notes} placeholder="Care, spacing, bloom time, or source"></textarea></label>
           <div class="form-actions"><button class="primary-button" type="submit">{editingPlantId ? 'Save plant' : 'Add plant'}</button>{#if editingPlantId}<button class="text-button" type="button" on:click={cancelPlantEdit}>Cancel edit</button>{/if}</div>
         </form>
-        <div class="catalogue"><p class="eyebrow">Catalogue ({(yard.plantLibrary || []).length})</p>{#if (yard.plantLibrary || []).length}{#each yard.plantLibrary as plant}<article class="plant-record"><div><strong>{plant.name}</strong><p>{plant.matureSize || 'Size not recorded'} · {plant.light} · {plant.seasonal}</p>{#if plant.notes}<small>{plant.notes}</small>{/if}</div><div class="record-actions"><button class="text-button" on:click={() => editPlant(plant)}>Edit</button><button class="text-button danger" on:click={() => removePlant(plant.id)}>Remove</button></div></article>{/each}{:else}<p class="library-note">Your plant catalogue is empty.</p>{/if}</div>
+        <div class="catalogue"><p class="eyebrow">Catalogue ({(yard.plantLibrary || []).length})</p>{#if (yard.plantLibrary || []).length}{#each yard.plantLibrary as plant}<article class="plant-record"><div><strong>{plant.name}</strong><p>{plant.matureSize || 'Size not recorded'} · {plant.light} · {plant.seasonal} · {plantPlacements[plant.id]?.length || 0} placed</p>{#if plant.notes}<small>{plant.notes}</small>{/if}</div><div class="record-actions"><button class="text-button" on:click={() => editPlant(plant)}>Edit</button><button class="text-button danger" on:click={() => removePlant(plant.id)}>Remove</button></div></article>{/each}{:else}<p class="library-note">Your plant catalogue is empty.</p>{/if}</div>
       {:else}
         <div class="library-records">{#if currentItems.length}{#each currentItems as item}<button class="library-record item-record" type="button" on:click={() => openLibraryItem(item)}><span><strong>{item.contents}</strong>{#if item.name}<small>{item.name}</small>{/if}</span><small>Row {item.row + 1}, column {item.column + 1}</small></button>{/each}{:else}<p class="library-note">Your garden has no current plant or item entries.</p>{/if}</div>
       {/if}
